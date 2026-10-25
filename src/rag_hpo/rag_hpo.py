@@ -71,8 +71,6 @@ class RAGHPO:
         embedder.get_embedding(hpo_df, hp_meta_file, emb_file)
         return RAGHPO(embedding_model, llm_client, hp_meta_file, emb_file)
 
-    # ======================= Entry points =======================
-
     def extract(
         self,
         notes: pd.DataFrame | Iterable[str],
@@ -184,8 +182,6 @@ class RAGHPO:
             )
         self._process_results(final)
         return final
-
-    # ======================= Pipeline stages =======================
 
     def _run_pipeline(
         self,
@@ -314,8 +310,6 @@ class RAGHPO:
         state["final"] = final
         self._save_state(state, paths, ["final"])
 
-    # ======================= Checkpointing =======================
-
     @staticmethod
     def _checkpoint_paths(checkpoint_dir) -> dict[str, Path]:
         if checkpoint_dir is None:
@@ -372,7 +366,7 @@ class RAGHPO:
             try:
                 return pd.read_csv(fname)
             except Exception as e:
-                print(f"Error loading CSV: {e}")
+                logger.error("Error loading CSV %r: %s", fname, e)
 
     @staticmethod
     def _process_results(final_df: pd.DataFrame):
@@ -380,11 +374,13 @@ class RAGHPO:
         if final_df.empty:
             logger.info("No final results to process.")
             return
-        choice = input("Save results as CSV or display? (save/display): ").strip().lower()
+        choice = (
+            input("Save results as CSV or display? (save/display): ").strip().lower()
+        )
         if choice == "save":
             fname = input("Output CSV filename (e.g., results.csv): ").strip()
             if not fname:
-                print("Filename cannot be empty. Skipping save.")
+                logger.warning("Filename cannot be empty. Skipping save.")
                 return
             rows = []
             for idx, r in final_df.iterrows():
@@ -405,9 +401,12 @@ class RAGHPO:
                             }
                         )
                     else:
-                        print(
-                            f"Warning: Blank HPO_Term for patient {pid}, phrase '{ph}', "
-                            f"category '{cat}' - not included in CSV."
+                        logger.warning(
+                            "Blank HPO_Term for patient %s, phrase %r, category %r "
+                            "- not included in CSV.",
+                            pid,
+                            ph,
+                            cat,
                         )
             if rows:
                 pd.DataFrame(rows).to_csv(fname, index=False)
@@ -434,13 +433,18 @@ class RAGHPO:
                         }
                     )
             if tbl:
-                print(tabulate(pd.DataFrame(tbl), headers="keys", tablefmt="psql"))
+                logger.info(
+                    "Results:\n%s",
+                    tabulate(pd.DataFrame(tbl), headers="keys", tablefmt="psql"),
+                )
             else:
                 logger.info("No terms to display.")
         else:
-            print("Invalid choice; please enter 'save' or 'display'.")
+            logger.warning(
+                "Invalid choice %r; please enter 'save' or 'display'.", choice
+            )
 
-    # ======================= Helpers =======================
+
 
     def _embed_query(self, text: str, metric: str = "cosine"):
         vec = np.ascontiguousarray(
