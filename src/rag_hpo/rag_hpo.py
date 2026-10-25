@@ -15,7 +15,6 @@ from numpy.typing import NDArray
 from rapidfuzz import fuzz
 from tabulate import tabulate
 
-from rag_hpo import hpo_doc
 from rag_hpo.checkpoint_store import CheckpointStore
 from rag_hpo.constants import PROMPTS
 from rag_hpo.embedder import Embedder
