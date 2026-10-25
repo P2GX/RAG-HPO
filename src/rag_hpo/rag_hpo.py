@@ -104,6 +104,7 @@ class RAGHPO:
         if not isinstance(parsed, dict):
             return []
         return parsed.get("phenotypes", [])
+
     @staticmethod
     def cleanup(temp_files, success):
         # Removes temp files if pipeline succeeded
@@ -206,7 +207,9 @@ class RAGHPO:
             df["patient_id"] = df["patient_id"].astype(int)
         return df
 
-    def _generate_hpo_terms(self, df_row: pd.DataFrame, system_message: str) -> pd.DataFrame:
+    def _generate_hpo_terms(
+        self, df_row: pd.DataFrame, system_message: str
+    ) -> pd.DataFrame:
         """
         Streamlined LLM + fallback logic with phrase normalization.
         """
@@ -259,7 +262,9 @@ class RAGHPO:
         )
 
     @staticmethod
-    def _parse_llm_mapping(resp_text: str, candidate_ids: set) -> tuple[str|None, str, dict|None]:
+    def _parse_llm_mapping(
+        resp_text: str, candidate_ids: set
+    ) -> tuple[str | None, str, dict | None]:
         """
         Simplified parsing: strict JSON → key lookup → regex fallback.
         """
@@ -296,7 +301,9 @@ class RAGHPO:
         return None, "no_hpo_found", None
 
     @staticmethod
-    def _extract_hpo_term(phrase: str, metadata_list: list, cluster_index: defaultdict) -> str | None:
+    def _extract_hpo_term(
+        phrase: str, metadata_list: list, cluster_index: defaultdict
+    ) -> str | None:
         # Maps phenotype phrase to best HPO term using multiple strategies
         if not metadata_list or (
             isinstance(metadata_list, float) and pd.isna(metadata_list)
@@ -369,9 +376,8 @@ class RAGHPO:
             if isinstance(v, str) and v.startswith("HP:"):
                 yield k, v
 
-
-    def _process_row(self,
-        clinical_note, system_message, embeddings_model, index, embedded_documents
+    def _process_row(
+        self, clinical_note, system_message, embeddings_model, index, embedded_documents
     ):
         # Clean the clinical note before sending to the LLM
         clinical_note = RAGHPO._clean_note(clinical_note)

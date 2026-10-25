@@ -7,6 +7,7 @@ _NON_ASCII_PATTERN = re.compile(r"[^\x00-\x7F]+")
 _WORD_PATTERN = re.compile(r"\w+")
 _JSON_OBJECT_PATTERN = re.compile(r"\{.*}", re.DOTALL)
 
+
 def _clean_text(txt: str) -> str:
     txt = _PARENS_PATTERN.sub(" ", txt)
     txt = _WHITESPACE_PATTERN.sub(" ", txt).strip().lower()

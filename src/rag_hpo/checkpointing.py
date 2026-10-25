@@ -30,6 +30,7 @@ def save_state_checkpoint(
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
+
 def load_state(temp_files: dict[str, Path]):
     # Loads pipeline state from temp files
     state = {}
