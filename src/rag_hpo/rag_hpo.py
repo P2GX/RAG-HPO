@@ -6,7 +6,7 @@ import time
 import unicodedata
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Self
 
 import faiss
 import numpy as np
@@ -64,12 +64,12 @@ class RAGHPO:
         llm_client: LLMClient,
         hp_meta_file: Path,
         emb_file: Path,
-    ) -> RAGHPO:
+    ) -> Self:
         df_builder = HPODataframeBuilder(ontology)
         hpo_df = df_builder.build_hpo_dataframe()
         embedder = Embedder(embedding_model)
         embedder.get_embedding(hpo_df, hp_meta_file, emb_file)
-        RAGHPO(embedding_model, llm_client, hp_meta_file, emb_file)
+        return RAGHPO(embedding_model, llm_client, hp_meta_file, emb_file)
 
     # ======================= Entry points =======================
 
