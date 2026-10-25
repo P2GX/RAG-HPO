@@ -59,7 +59,9 @@ class CheckpointStore:
                 logger.info("Loaded checkpoint '%s' (%d rows)", key, len(state[key]))
         return state
 
-    def save(self, state: dict[str, pd.DataFrame | None], keys: Iterable[str] | None = None):
+    def save(
+        self, state: dict[str, pd.DataFrame | None], keys: Iterable[str] | None = None
+    ):
         """Atomically write the given stages (all by default). None entries are skipped."""
         if not self.enabled:
             return

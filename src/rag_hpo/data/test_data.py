@@ -2,6 +2,7 @@ from importlib.resources import files
 
 import pandas as pd
 
+
 def test_data() -> pd.DataFrame:
     """Load the bundled clinical-notes example dataset.
 

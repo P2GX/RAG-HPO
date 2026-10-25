@@ -17,13 +17,14 @@ from tabulate import tabulate
 from tqdm import tqdm
 
 from rag_hpo.checkpoint_store import CheckpointStore
+from rag_hpo.constants import PROMPTS
 from rag_hpo.embedder import Embedder
 from rag_hpo.embedding_model import EmbeddingModel
 from rag_hpo.hpo_df_builder import HPODataframeBuilder
 from rag_hpo.hpo_doc import HPODoc
 from rag_hpo.llm_client import LLMClient
 from rag_hpo.ontology import Ontology
-from utils import (
+from rag_hpo.utils import (
     _JSON_OBJECT_PATTERN,
     _NON_ASCII_PATTERN,
     _WHITESPACE_PATTERN,
@@ -36,7 +37,13 @@ logger = logging.getLogger(__name__)
 # Pipeline stages that get checkpointed (in order). "input" marks a resumable run.
 _CHECKPOINT_KEYS = ("input", "processed", "combined", "exact", "non_exact", "final")
 # Columns every per-note findings frame must have.
-_FINDING_COLS = ["phrase", "category", "unique_metadata", "original_sentence", "patient_id"]
+_FINDING_COLS = [
+    "phrase",
+    "category",
+    "unique_metadata",
+    "original_sentence",
+    "patient_id",
+]
 
 
 class RAGHPO:
@@ -75,8 +82,8 @@ class RAGHPO:
     def extract(
         self,
         notes: pd.DataFrame | Iterable[str],
-        system_message_extract: str,
-        system_message_map: str,
+        system_message_extract: str = PROMPTS["system_message_I"],
+        system_message_map: str = PROMPTS["system_message_II"],
         checkpoint_dir: Path | str | None = None,
         notes_checkpoint_every: int = 20,
         mapping_checkpoint_every: int = 50,
@@ -100,7 +107,9 @@ class RAGHPO:
         HPO_Terms is a list of {'phrase', 'category', 'HPO_Term'} dicts.
         """
         if notes is None:
-            raise ValueError("notes is required; use extract_from_checkpoint() to resume.")
+            raise ValueError(
+                "notes is required; use extract_from_checkpoint() to resume."
+            )
 
         store = CheckpointStore(checkpoint_dir, _CHECKPOINT_KEYS)
         existing = store.existing()
@@ -144,7 +153,9 @@ class RAGHPO:
         """
         store = CheckpointStore(checkpoint_dir, _CHECKPOINT_KEYS)
         if not store.exists():
-            raise FileNotFoundError(f"No checkpoint to resume from in {checkpoint_dir}.")
+            raise FileNotFoundError(
+                f"No checkpoint to resume from in {checkpoint_dir}."
+            )
 
         state = store.load()
         logger.info("Resuming from checkpoint in %s", checkpoint_dir)
@@ -197,9 +208,13 @@ class RAGHPO:
         self._ensure_index()
 
         try:
-            self._stage_process_notes(state, store, system_message_extract, notes_checkpoint_every)
+            self._stage_process_notes(
+                state, store, system_message_extract, notes_checkpoint_every
+            )
             self._stage_split(state, store)
-            self._stage_map_non_exact(state, store, system_message_map, mapping_checkpoint_every)
+            self._stage_map_non_exact(
+                state, store, system_message_map, mapping_checkpoint_every
+            )
             self._stage_compile(state, store)
         except Exception:
             logger.exception("Pipeline error. Saving progress for resume.")
@@ -218,9 +233,13 @@ class RAGHPO:
         self._docs = docs
         self._cluster_index = self._build_cluster_index(docs)
 
-    def _stage_process_notes(self, state, store: CheckpointStore, system_message, every):
+    def _stage_process_notes(
+        self, state, store: CheckpointStore, system_message, every
+    ):
         inp = state["input"]
-        done = set(state["processed"]["row"]) if state["processed"] is not None else set()
+        done = (
+            set(state["processed"]["row"]) if state["processed"] is not None else set()
+        )
         todo = [i for i in range(len(inp)) if i not in done]
         if not todo:
             logger.info("All notes already processed.")
@@ -229,7 +248,9 @@ class RAGHPO:
             return
 
         parts = [state["combined"]] if state["combined"] is not None else []
-        for n, i in enumerate(tqdm(todo, desc="Processing notes", unit="note"), start=1):
+        for n, i in enumerate(
+            tqdm(todo, desc="Processing notes", unit="note"), start=1
+        ):
             row = inp.iloc[i]
             res = self._process_row(row["clinical_note"], system_message)
             if not res.empty:
@@ -269,20 +290,26 @@ class RAGHPO:
         state["exact"], state["non_exact"] = self._split_exact_nonexact(df, "HPO_Term")
         store.save(state, ["exact", "non_exact"])
 
-    def _stage_map_non_exact(self, state, store: CheckpointStore, system_message, every):
+    def _stage_map_non_exact(
+        self, state, store: CheckpointStore, system_message, every
+    ):
         non_ex = state["non_exact"].copy()
         for col in ("HPO_Term", "llm_parse_reason", "raw_llm_resp"):
             if col not in non_ex.columns:
                 non_ex[col] = None
             non_ex[col] = non_ex[col].astype(object)
 
-        todo = non_ex.index[(non_ex["category"] == "Abnormal") & non_ex["HPO_Term"].isna()]
+        todo = non_ex.index[
+            (non_ex["category"] == "Abnormal") & non_ex["HPO_Term"].isna()
+        ]
         if todo.empty:
             logger.info("No non-exact entries to process.")
             return
 
         logger.info("Generating HPO for %d entries...", len(todo))
-        for n, idx in enumerate(tqdm(todo, desc="Generating HPO", unit="entry"), start=1):
+        for n, idx in enumerate(
+            tqdm(todo, desc="Generating HPO", unit="entry"), start=1
+        ):
             rec = self._generate_hpo_terms(non_ex.loc[[idx]], system_message).iloc[0]
             hp = rec["HPO_Terms"][0]["HPO_Term"]
             non_ex.at[idx, "llm_parse_reason"] = rec["llm_parse_reason"]
@@ -334,7 +361,9 @@ class RAGHPO:
         if final_df.empty:
             logger.info("No final results to process.")
             return
-        choice = input("Save results as CSV or display? (save/display): ").strip().lower()
+        choice = (
+            input("Save results as CSV or display? (save/display): ").strip().lower()
+        )
         if choice == "save":
             fname = input("Output CSV filename (e.g., results.csv): ").strip()
             if not fname:
@@ -392,13 +421,15 @@ class RAGHPO:
                     )
             if tbl:
                 logger.info(
-                    "Results:\n%s", tabulate(pd.DataFrame(tbl), headers="keys", tablefmt="psql")
+                    "Results:\n%s",
+                    tabulate(pd.DataFrame(tbl), headers="keys", tablefmt="psql"),
                 )
             else:
                 logger.info("No terms to display.")
         else:
-            logger.warning("Invalid choice %r; please enter 'save' or 'display'.", choice)
-
+            logger.warning(
+                "Invalid choice %r; please enter 'save' or 'display'.", choice
+            )
 
     def _embed_query(self, text: str, metric: str = "cosine"):
         vec = np.ascontiguousarray(
@@ -421,9 +452,13 @@ class RAGHPO:
     @staticmethod
     def _split_exact_nonexact(df: pd.DataFrame, hpo_term_col="HPO_Term"):
         if "category" not in df.columns:
-            raise KeyError(f"[FATAL] 'category' missing; columns: {df.columns.tolist()}")
+            raise KeyError(
+                f"[FATAL] 'category' missing; columns: {df.columns.tolist()}"
+            )
         if hpo_term_col not in df.columns:
-            raise KeyError(f"[FATAL] '{hpo_term_col}' missing; columns: {df.columns.tolist()}")
+            raise KeyError(
+                f"[FATAL] '{hpo_term_col}' missing; columns: {df.columns.tolist()}"
+            )
 
         # only keep Abnormal rows
         df_ab = df[df["category"] == "Abnormal"]
@@ -467,7 +502,9 @@ class RAGHPO:
             df["patient_id"] = df["patient_id"].astype(int)
         return df
 
-    def _generate_hpo_terms(self, df_row: pd.DataFrame, system_message: str) -> pd.DataFrame:
+    def _generate_hpo_terms(
+        self, df_row: pd.DataFrame, system_message: str
+    ) -> pd.DataFrame:
         """
         Streamlined LLM + fallback logic with phrase normalization.
         """
@@ -660,7 +697,9 @@ class RAGHPO:
                     continue
 
         findings = [
-            f for f in findings if isinstance(f, dict) and f.get("category") == "Abnormal"
+            f
+            for f in findings
+            if isinstance(f, dict) and f.get("category") == "Abnormal"
         ]
         if not findings:
             return pd.DataFrame(columns=_FINDING_COLS)
@@ -672,11 +711,7 @@ class RAGHPO:
         return df
 
     def _process_findings(
-        self,
-        findings,
-        clinical_note: str,
-        metric: str = "cosine",
-        keep_top: int = 15,
+        self, findings, clinical_note: str, metric: str = "cosine", keep_top: int = 15
     ) -> pd.DataFrame:
         """
         Processes findings and returns DataFrame with phrase, category,
@@ -757,10 +792,16 @@ class RAGHPO:
                 continue
 
             info = doc.get("info", "") or ""
-            token_overlap = bool(clean_tokens & set(_WORD_PATTERN.findall(info.lower())))
+            token_overlap = bool(
+                clean_tokens & set(_WORD_PATTERN.findall(info.lower()))
+            )
 
             # accept if token overlap, or above similarity threshold, or to reach min_unique
-            if token_overlap or sim >= similarity_threshold or len(results) < min_unique:
+            if (
+                token_overlap
+                or sim >= similarity_threshold
+                or len(results) < min_unique
+            ):
                 seen_hp.add(hp)
                 results.append(
                     {

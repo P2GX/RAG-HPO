@@ -1,4 +1,5 @@
 import os
+import re
 import time
 from collections import deque
 from datetime import date
@@ -6,23 +7,29 @@ from datetime import date
 import requests
 import tiktoken
 
+_THINK_BLOCK = re.compile(r"<think>.*?</think>", re.S)
+
 
 class TokenBudgetExceeded(RuntimeError):
     pass
 
 
 class LLMClient:
-    """Client for any OpenAI-compatible chat completions endpoint (Groq, OpenAI, Ollama, vLLM, ...)."""
+    """Client for any OpenAI-compatible chat completions endpoint (Ollama, Groq, OpenAI, vLLM, ...).
+
+    Defaults to a local Ollama server. Use LLMClient.groq() for the hosted setup.
+    """
 
     def __init__(
         self,
-        model_name: str = "llama-3.3-70b-versatile",
-        endpoint: str = "https://api.groq.com/openai/v1/chat/completions",
+        model_name: str = "qwen3.5:4b",
+        endpoint: str = "http://localhost:11434/v1/chat/completions",
         api_key: str | None = None,
-        max_tokens_per_day: int | None = 500_000,
-        max_queries_per_minute: int | None = 30,
-        temperature: float = 0.7,
-        timeout: float = 60.0,
+        max_tokens_per_day: int | None = None,
+        max_queries_per_minute: int | None = None,
+        temperature: float = 0.0,
+        timeout: float = 300.0,
+        json_mode: bool = True,
     ) -> None:
         self.model_name = model_name
         self.endpoint = endpoint
@@ -30,6 +37,7 @@ class LLMClient:
         self.max_queries_per_minute = max_queries_per_minute
         self.temperature = temperature
         self.timeout = timeout
+        self.json_mode = json_mode
 
         # Local servers usually need no key; hosted APIs do.
         key = api_key if api_key is not None else os.environ.get("LLM_API_KEY")
@@ -48,6 +56,24 @@ class LLMClient:
             # Approximation for non-OpenAI models; fine for budget estimates.
             self._encoder = tiktoken.get_encoding("cl100k_base")
 
+    @classmethod
+    def groq(
+        cls,
+        model_name: str = "llama-3.3-70b-versatile",
+        api_key: str | None = None,
+        **kwargs,
+    ) -> "LLMClient":
+        """Hosted Groq setup with its free-tier limits."""
+        kwargs.setdefault("max_tokens_per_day", 500_000)
+        kwargs.setdefault("max_queries_per_minute", 30)
+        kwargs.setdefault("timeout", 60.0)
+        return cls(
+            model_name=model_name,
+            endpoint="https://api.groq.com/openai/v1/chat/completions",
+            api_key=api_key,
+            **kwargs,
+        )
+
     def query(self, user_input: str, system_message: str) -> str:
         estimated = len(self._encoder.encode(user_input)) + len(
             self._encoder.encode(system_message)
@@ -63,6 +89,9 @@ class LLMClient:
             ],
             "temperature": self.temperature,
         }
+        if self.json_mode:
+            payload["response_format"] = {"type": "json_object"}
+
         resp = self._session.post(
             self.endpoint, headers=self._headers, json=payload, timeout=self.timeout
         )
@@ -75,7 +104,10 @@ class LLMClient:
         choices = result.get("choices") or []
         if not choices:
             return ""
-        return choices[0].get("message", {}).get("content") or ""
+        content = choices[0].get("message", {}).get("content") or ""
+        # Reasoning models may prepend a <think> block; it can contain braces
+        # that confuse the JSON extraction downstream.
+        return _THINK_BLOCK.sub("", content).strip()
 
     def _check_token_budget(self, estimated: int) -> None:
         if self.max_tokens_per_day is None:

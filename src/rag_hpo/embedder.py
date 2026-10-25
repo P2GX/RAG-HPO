@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,8 @@ import pandas as pd
 
 from rag_hpo.embedding_model import EmbeddingModel
 from rag_hpo.utils import _clean_text
+
+logger = logging.getLogger(__name__)
 
 
 class Embedder:
@@ -49,13 +52,18 @@ class Embedder:
                 }
             )
             if row["hp_id"] not in constants:
-                constants[row["hp_id"]] = {
-                    f: getattr(row, f) for f in self._CONSTANT_FIELDS
-                }
+                constants[row["hp_id"]] = {f: row[f] for f in self._CONSTANT_FIELDS}
 
         if not infos:
             raise ValueError("hpo_df is empty; nothing to embed")
 
+        logger.debug(
+            "Encoding %d phrases (%d unique HPO terms) with %s, batch_size=%d",
+            len(infos),
+            len(constants),
+            self._model.model_name,
+            self._batch_size,
+        )
         emb_matrix = self._model.encode(infos, batch_size=self._batch_size).astype(
             np.float16
         )
@@ -69,7 +77,9 @@ class Embedder:
             json.dump(combined, f, separators=(",", ":"))
 
         np.savez_compressed(emb_file, emb=emb_matrix)
-        print(f"Saved {len(entries)} embeddings → {hp_meta_file}, {emb_file}")
+        logger.info(
+            "Saved %d embeddings → %s, %s", len(entries), hp_meta_file, emb_file
+        )
 
     def _direction(self, info: str) -> int:
         if self._NEG_PATTERN.search(info):

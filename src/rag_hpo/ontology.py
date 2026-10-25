@@ -40,7 +40,7 @@ class Ontology:
                 lineage_memo[node] = [[self._root_id]]
                 continue
 
-            parents = self.get_direct_parents.get(node, [])
+            parents = self.get_direct_parents(node)
             if not parents:
                 # orphan: just attach root + self
                 lineage_memo[node] = [[self._root_id, node]]
