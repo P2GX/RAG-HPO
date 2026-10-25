@@ -96,6 +96,7 @@ import os
 import sys
 import subprocess
 
+
 def check_python_version(min_version=(3, 7)):
     """
     Ensure the Python version meets the minimum requirement.
@@ -104,6 +105,7 @@ def check_python_version(min_version=(3, 7)):
         print(f"Error: Python {'.'.join(map(str, min_version))} or higher is required.")
         print("Please update your Python installation and try again.")
         sys.exit(1)
+
 
 def install_package(package):
     """
@@ -115,6 +117,7 @@ def install_package(package):
         print(f"Successfully installed {package}.")
     except subprocess.CalledProcessError as e:
         print(f"Failed to install {package}: {e}")
+
 
 def install_requirements(requirements_file="requirements.txt"):
     """
@@ -131,6 +134,7 @@ def install_requirements(requirements_file="requirements.txt"):
             if package and not package.startswith("#"):
                 install_package(package)
     print("Finished processing requirements.")
+
 
 if __name__ == "__main__":
     # Check Python version first
