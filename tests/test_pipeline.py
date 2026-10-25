@@ -1,3 +1,5 @@
+import json
+from dataclasses import asdict
 from pathlib import Path
 
 import pronto
@@ -35,5 +37,7 @@ def test_pipeline():
             "During the interview the patient displayed marked autistic behaviors, including poor eye contact and rigid, repetitive speech, and also reported ongoing hallucinations that had worsened over the past month."
         ]
     )
-    res.to_csv("/Users/rouvenreuter/Documents/Projects/RAG-HPO/results.csv")
+
+    with open("/Users/rouvenreuter/Documents/Projects/RAG-HPO/hits.json", "w") as f:
+        json.dump({k: [asdict(h) for h in v] for k, v in res.items()}, f, indent=2)
     print(res)

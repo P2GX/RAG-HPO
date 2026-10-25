@@ -64,9 +64,10 @@ from rag_hpo.embedding_model import SentenceTransformerModel
 from rag_hpo.llm_client import LLMClient
 from rag_hpo.ontology import Ontology
 from rag_hpo.rag_hpo import RAGHPO
+from rag_hpo.hit import Hit
 
-embedding_model = SentenceTransformerModel()   # SapBERT-based biomedical model
-llm = LLMClient()                              # Ollama at localhost:11434, model qwen3.5:4b
+embedding_model = SentenceTransformerModel()  # SapBERT-based biomedical model
+llm = LLMClient()  # Ollama at localhost:11434, model qwen3.5:4b
 
 # One-time: build the HPO vector database (repeat when HPO releases a new version)
 ontology = Ontology(pronto.Ontology("hp.obo"))
@@ -81,11 +82,13 @@ rag = RAGHPO.inti_and_create_embeddings(
 # Later runs: load the existing database
 rag = RAGHPO(embedding_model, llm, "hpo_meta.json", "hpo_embedded.npz")
 
-results = rag.extract([
-    "The patient has recurrent seizures and global developmental delay. Hearing is normal.",
-])
-print(results.loc[0, "HPO_Terms"])
-# [{'phrase': 'recurrent seizures', 'category': 'Abnormal', 'HPO_Term': 'HP:0001250'}, ...]
+results: dict[str, list[Hit]] = rag.extract(
+    [
+        "The patient has recurrent seizures and global developmental delay. Hearing is normal."
+    ]
+)
+
+print(results["0"].hpo_id)
 ```
 
 To process a CSV of notes, pass a DataFrame with a `clinical_note` column and,
@@ -94,7 +97,7 @@ optionally, a `patient_id` column:
 ```python
 import pandas as pd
 
-notes = pd.read_csv("notes.csv")   # columns: patient_id, clinical_note
+notes = pd.read_csv("notes.csv")  # columns: patient_id, clinical_note
 results = rag.extract(notes, checkpoint_dir="checkpoints")
 ```
 
@@ -103,7 +106,7 @@ results = rag.extract(notes, checkpoint_dir="checkpoints")
 ```python
 import os
 
-llm = LLMClient.groq(api_key=os.environ["GROQ_API_KEY"])   # llama-3.3-70b-versatile
+llm = LLMClient.groq(api_key=os.environ["GROQ_API_KEY"])  # llama-3.3-70b-versatile
 ```
 
 `LLMClient.groq()` applies Groq's free-tier limits: 30 requests per minute and 500,000
@@ -112,32 +115,27 @@ and other endpoints.
 
 ## Output
 
-`extract()` returns a DataFrame with one row per patient:
+`extract()` returns a `dict[str, list[Hit]]` where the key represents a patient.
 
-| column       | type         | description                                         |
-|--------------|--------------|-----------------------------------------------------|
-| `patient_id` | `int`        | from the input, or `1..n` if none was given         |
-| `HPO_Terms`  | `list[dict]` | `{"phrase", "category", "HPO_Term"}` for each finding |
-
-`HPO_Term` is an HPO ID such as `HP:0001250`, or the string `"No Candidate Fit"` if
-nothing could be mapped. Patients with no abnormal findings are left out. To get one
-row per finding:
-
-```python
-flat = results.explode("HPO_Terms", ignore_index=True)
-flat = flat.join(pd.json_normalize(flat.pop("HPO_Terms")))
-flat.to_csv("results.csv", index=False)
+```json
+{
+  "1": [
+    {
+      "phrase": "poor eye contact",
+      "category": "Abnormal",
+      "hpo_id": "HP:0000817"
+    },
+    {
+      "phrase": "marked autistic behaviors",
+      "category": "Abnormal",
+      "hpo_id": "No Candidate Fit"
+    }
+  ]
+}
 ```
 
-## Documentation
-
-| Guide | Contents |
-|---|---|
-| [Getting started](docs/getting-started.md) | Installing, building the vector database, a first run |
-| [Pipeline](docs/pipeline.md) | What each stage does, retrieval and matching rules, prompts |
-| [Configuration](docs/configuration.md) | LLM endpoints, embedding models, custom prompts, rate limits |
-| [Checkpointing](docs/checkpointing.md) | Resuming long runs after a crash or quota limit |
-| [API reference](docs/api-reference.md) | Every public class and method |
+`hpo_id` is an HPO ID such as `HP:0001250`, or the string `"No Candidate Fit"` if
+nothing could be mapped. Patients with no abnormal findings are left out.
 
 ## Citation
 

@@ -1,0 +1,2 @@
+,patient_id,HPO_Terms
+0,1,"[{'phrase': 'poor eye contact', 'category': 'Abnormal', 'HPO_Term': 'HP:0000817'}, {'phrase': 'marked autistic behaviors', 'category': 'Abnormal', 'HPO_Term': 'No Candidate Fit'}, {'phrase': 'rigid, repetitive speech', 'category': 'Abnormal', 'HPO_Term': 'No Candidate Fit'}, {'phrase': 'ongoing hallucinations that had worsened over the past month', 'category': 'Abnormal', 'HPO_Term': 'HP:0025126'}]"

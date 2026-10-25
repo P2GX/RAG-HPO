@@ -15,10 +15,12 @@ from numpy.typing import NDArray
 from rapidfuzz import fuzz
 from tabulate import tabulate
 
+from rag_hpo import hpo_doc
 from rag_hpo.checkpoint_store import CheckpointStore
 from rag_hpo.constants import PROMPTS
 from rag_hpo.embedder import Embedder
 from rag_hpo.embedding_model import EmbeddingModel
+from rag_hpo.hit import Hit
 from rag_hpo.hpo_df_builder import HPODataframeBuilder
 from rag_hpo.hpo_doc import HPODoc
 from rag_hpo.llm_client import LLMClient
@@ -86,7 +88,7 @@ class RAGHPO:
         checkpoint_dir: Path | str | None = None,
         notes_checkpoint_every: int = 20,
         mapping_checkpoint_every: int = 50,
-    ) -> pd.DataFrame:
+    ) -> dict[str, list[Hit]]:
         """
         Run the full HPO extraction pipeline on new notes.
 
@@ -124,7 +126,7 @@ class RAGHPO:
         state["input"] = self._validate_input(notes)
         store.save(state, ["input"])
 
-        return self._run_pipeline(
+        res_df = self._run_pipeline(
             state,
             store,
             system_message_extract,
@@ -133,6 +135,19 @@ class RAGHPO:
             mapping_checkpoint_every,
         )
 
+        out = defaultdict(list)
+        for row in res_df.to_dict(orient="records"):
+            for hit in row["HPO_Terms"]:
+                out[row["patient_id"]].append(
+                    Hit(
+                        phrase=hit["phrase"],
+                        category=hit["category"],
+                        hpo_id=hit["HPO_Term"],
+                    )
+                )
+
+        return out
+
     def extract_from_checkpoint(
         self,
         checkpoint_dir: Path | str,
@@ -140,7 +155,7 @@ class RAGHPO:
         system_message_map: str,
         notes_checkpoint_every: int = 20,
         mapping_checkpoint_every: int = 50,
-    ) -> pd.DataFrame:
+    ) -> dict[str, list[Hit]]:
         """
         Resume a run that extract() started with the same checkpoint_dir.
 
@@ -159,7 +174,7 @@ class RAGHPO:
         state = store.load()
         logger.info("Resuming from checkpoint in %s", checkpoint_dir)
 
-        return self._run_pipeline(
+        res_df = self._run_pipeline(
             state,
             store,
             system_message_extract,
@@ -168,31 +183,22 @@ class RAGHPO:
             mapping_checkpoint_every,
         )
 
+        out = defaultdict(list)
+        for row in res_df.to_dict(orient="records"):
+            for hit in row["HPO_Terms"]:
+                out[row["patient_id"]].append(
+                    Hit(
+                        phrase=hit["phrase"],
+                        category=hit["category"],
+                        hpo_id=hit["HPO_Term"],
+                    )
+                )
+        return out
+
     @staticmethod
     def has_checkpoint(checkpoint_dir: Path | str) -> bool:
         """True if checkpoint_dir holds a run that extract_from_checkpoint() can resume."""
         return CheckpointStore(checkpoint_dir, _CHECKPOINT_KEYS).exists()
-
-    def run_interactive(
-        self,
-        system_message_extract: str,
-        system_message_map: str,
-        checkpoint_dir: Path | str = "checkpoints",
-    ) -> pd.DataFrame:
-        """Console version of the notebook's main(): prompts for input and output."""
-        if self.has_checkpoint(checkpoint_dir):
-            final = self.extract_from_checkpoint(
-                checkpoint_dir, system_message_extract, system_message_map
-            )
-        else:
-            final = self.extract(
-                self._prompt_for_notes(),
-                system_message_extract,
-                system_message_map,
-                checkpoint_dir=checkpoint_dir,
-            )
-        self._process_results(final)
-        return final
 
     def _run_pipeline(
         self,
