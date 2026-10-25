@@ -16,6 +16,7 @@ from rapidfuzz import fuzz
 from tabulate import tabulate
 from tqdm import tqdm
 
+from rag_hpo.checkpoint_store import CheckpointStore
 from rag_hpo.embedder import Embedder
 from rag_hpo.embedding_model import EmbeddingModel
 from rag_hpo.hpo_df_builder import HPODataframeBuilder
@@ -32,7 +33,7 @@ from utils import (
 
 logger = logging.getLogger(__name__)
 
-# Pipeline stages that get checkpointed (in order).
+# Pipeline stages that get checkpointed (in order). "input" marks a resumable run.
 _CHECKPOINT_KEYS = ("input", "processed", "combined", "exact", "non_exact", "final")
 # Columns every per-note findings frame must have.
 _FINDING_COLS = ["phrase", "category", "unique_metadata", "original_sentence", "patient_id"]
@@ -101,8 +102,8 @@ class RAGHPO:
         if notes is None:
             raise ValueError("notes is required; use extract_from_checkpoint() to resume.")
 
-        paths = self._checkpoint_paths(checkpoint_dir)
-        existing = [p.name for p in paths.values() if p.exists()]
+        store = CheckpointStore(checkpoint_dir, _CHECKPOINT_KEYS)
+        existing = store.existing()
         if existing:
             raise FileExistsError(
                 f"{checkpoint_dir} already holds checkpoints ({', '.join(existing)}). "
@@ -111,13 +112,13 @@ class RAGHPO:
 
         if not isinstance(notes, pd.DataFrame):
             notes = pd.DataFrame({"clinical_note": list(notes)})
-        state = {key: None for key in _CHECKPOINT_KEYS}
+        state = store.empty_state()
         state["input"] = self._validate_input(notes)
-        self._save_state(state, paths, ["input"])
+        store.save(state, ["input"])
 
         return self._run_pipeline(
             state,
-            paths,
+            store,
             system_message_extract,
             system_message_map,
             notes_checkpoint_every,
@@ -141,16 +142,16 @@ class RAGHPO:
 
         Returns the same frame as extract().
         """
-        if not self.has_checkpoint(checkpoint_dir):
+        store = CheckpointStore(checkpoint_dir, _CHECKPOINT_KEYS)
+        if not store.exists():
             raise FileNotFoundError(f"No checkpoint to resume from in {checkpoint_dir}.")
 
-        paths = self._checkpoint_paths(checkpoint_dir)
-        state = self._load_state(paths)
+        state = store.load()
         logger.info("Resuming from checkpoint in %s", checkpoint_dir)
 
         return self._run_pipeline(
             state,
-            paths,
+            store,
             system_message_extract,
             system_message_map,
             notes_checkpoint_every,
@@ -160,7 +161,7 @@ class RAGHPO:
     @staticmethod
     def has_checkpoint(checkpoint_dir: Path | str) -> bool:
         """True if checkpoint_dir holds a run that extract_from_checkpoint() can resume."""
-        return (Path(checkpoint_dir) / "input.pkl").exists()
+        return CheckpointStore(checkpoint_dir, _CHECKPOINT_KEYS).exists()
 
     def run_interactive(
         self,
@@ -185,27 +186,27 @@ class RAGHPO:
 
     def _run_pipeline(
         self,
-        state,
-        paths,
-        system_message_extract,
-        system_message_map,
-        notes_checkpoint_every,
-        mapping_checkpoint_every,
+        state: dict[str, pd.DataFrame | None],
+        store: CheckpointStore,
+        system_message_extract: str,
+        system_message_map: str,
+        notes_checkpoint_every: int,
+        mapping_checkpoint_every: int,
     ) -> pd.DataFrame:
         start = time.time()
         self._ensure_index()
 
         try:
-            self._stage_process_notes(state, paths, system_message_extract, notes_checkpoint_every)
-            self._stage_split(state, paths)
-            self._stage_map_non_exact(state, paths, system_message_map, mapping_checkpoint_every)
-            self._stage_compile(state, paths)
+            self._stage_process_notes(state, store, system_message_extract, notes_checkpoint_every)
+            self._stage_split(state, store)
+            self._stage_map_non_exact(state, store, system_message_map, mapping_checkpoint_every)
+            self._stage_compile(state, store)
         except Exception:
             logger.exception("Pipeline error. Saving progress for resume.")
-            self._save_state(state, paths)
+            store.save(state)
             raise
 
-        self._cleanup(paths)
+        store.clear()
         logger.info("Pipeline completed in %.2fs", time.time() - start)
         return state["final"]
 
@@ -217,7 +218,7 @@ class RAGHPO:
         self._docs = docs
         self._cluster_index = self._build_cluster_index(docs)
 
-    def _stage_process_notes(self, state, paths, system_message, every):
+    def _stage_process_notes(self, state, store: CheckpointStore, system_message, every):
         inp = state["input"]
         done = set(state["processed"]["row"]) if state["processed"] is not None else set()
         todo = [i for i in range(len(inp)) if i not in done]
@@ -243,9 +244,9 @@ class RAGHPO:
                     else pd.DataFrame(columns=_FINDING_COLS)
                 )
                 state["processed"] = pd.DataFrame({"row": sorted(done)})
-                self._save_state(state, paths, ["combined", "processed"])
+                store.save(state, ["combined", "processed"])
 
-    def _stage_split(self, state, paths):
+    def _stage_split(self, state, store: CheckpointStore):
         if state["exact"] is not None and state["non_exact"] is not None:
             logger.info("Skipped splitting; checkpoint exists.")
             return
@@ -266,9 +267,9 @@ class RAGHPO:
             ]
 
         state["exact"], state["non_exact"] = self._split_exact_nonexact(df, "HPO_Term")
-        self._save_state(state, paths, ["exact", "non_exact"])
+        store.save(state, ["exact", "non_exact"])
 
-    def _stage_map_non_exact(self, state, paths, system_message, every):
+    def _stage_map_non_exact(self, state, store: CheckpointStore, system_message, every):
         non_ex = state["non_exact"].copy()
         for col in ("HPO_Term", "llm_parse_reason", "raw_llm_resp"):
             if col not in non_ex.columns:
@@ -290,9 +291,9 @@ class RAGHPO:
 
             if n % every == 0 or n == len(todo):
                 state["non_exact"] = non_ex.copy()
-                self._save_state(state, paths, ["non_exact"])
+                store.save(state, ["non_exact"])
 
-    def _stage_compile(self, state, paths):
+    def _stage_compile(self, state, store: CheckpointStore):
         if state["final"] is not None:
             logger.info("Skipped final compilation; checkpoint exists.")
             return
@@ -308,48 +309,7 @@ class RAGHPO:
                 .reset_index(name="HPO_Terms")
             )
         state["final"] = final
-        self._save_state(state, paths, ["final"])
-
-    @staticmethod
-    def _checkpoint_paths(checkpoint_dir) -> dict[str, Path]:
-        if checkpoint_dir is None:
-            return {}
-        d = Path(checkpoint_dir)
-        d.mkdir(parents=True, exist_ok=True)
-        return {key: d / f"{key}.pkl" for key in _CHECKPOINT_KEYS}
-
-    @staticmethod
-    def _load_state(paths: dict[str, Path]) -> dict[str, pd.DataFrame | None]:
-        # None = stage not reached yet; an empty DataFrame = stage done, no rows.
-        state = {key: None for key in _CHECKPOINT_KEYS}
-        for key, path in paths.items():
-            if path.exists():
-                state[key] = pd.read_pickle(path)
-                logger.info("Loaded checkpoint '%s' (%d rows)", key, len(state[key]))
-        return state
-
-    @staticmethod
-    def _save_state(state, paths: dict[str, Path], keys=None):
-        for key in keys or _CHECKPOINT_KEYS:
-            df, path = state.get(key), paths.get(key)
-            if df is None or path is None:
-                continue
-            tmp = path.with_suffix(path.suffix + ".tmp")
-            try:
-                df.to_pickle(tmp)
-                os.replace(tmp, path)  # atomic
-                logger.debug("Checkpointed '%s' (%d rows) -> %s", key, len(df), path)
-            except Exception:
-                logger.exception("Error saving checkpoint '%s'", key)
-                tmp.unlink(missing_ok=True)
-
-    @staticmethod
-    def _cleanup(paths: dict[str, Path]):
-        for path in paths.values():
-            try:
-                path.unlink(missing_ok=True)
-            except OSError as e:
-                logger.warning("Error removing checkpoint %s: %s", path, e)
+        store.save(state, ["final"])
 
     @staticmethod
     def _prompt_for_notes() -> pd.DataFrame:
@@ -374,9 +334,7 @@ class RAGHPO:
         if final_df.empty:
             logger.info("No final results to process.")
             return
-        choice = (
-            input("Save results as CSV or display? (save/display): ").strip().lower()
-        )
+        choice = input("Save results as CSV or display? (save/display): ").strip().lower()
         if choice == "save":
             fname = input("Output CSV filename (e.g., results.csv): ").strip()
             if not fname:
@@ -434,16 +392,12 @@ class RAGHPO:
                     )
             if tbl:
                 logger.info(
-                    "Results:\n%s",
-                    tabulate(pd.DataFrame(tbl), headers="keys", tablefmt="psql"),
+                    "Results:\n%s", tabulate(pd.DataFrame(tbl), headers="keys", tablefmt="psql")
                 )
             else:
                 logger.info("No terms to display.")
         else:
-            logger.warning(
-                "Invalid choice %r; please enter 'save' or 'display'.", choice
-            )
-
+            logger.warning("Invalid choice %r; please enter 'save' or 'display'.", choice)
 
 
     def _embed_query(self, text: str, metric: str = "cosine"):
