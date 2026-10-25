@@ -36,6 +36,7 @@ dependencies = [
     "pronto>=2.7.4,<3",
     "faiss-cpu>=1.15.1,<2",
     "sentence-transformers>=6.2.0,<7",
+    "fastembed >=0.9.1<1",
     "tiktoken>=0.14.0,<1",
     "rapidfuzz>=3.14.6,<4",
     "tabulate>=0.10.0,<1",

@@ -14,7 +14,6 @@ import pandas as pd
 from numpy.typing import NDArray
 from rapidfuzz import fuzz
 from tabulate import tabulate
-from tqdm import tqdm
 
 from rag_hpo.checkpoint_store import CheckpointStore
 from rag_hpo.constants import PROMPTS
@@ -248,9 +247,7 @@ class RAGHPO:
             return
 
         parts = [state["combined"]] if state["combined"] is not None else []
-        for n, i in enumerate(
-            tqdm(todo, desc="Processing notes", unit="note"), start=1
-        ):
+        for n, i in enumerate(todo):
             row = inp.iloc[i]
             res = self._process_row(row["clinical_note"], system_message)
             if not res.empty:
@@ -307,9 +304,7 @@ class RAGHPO:
             return
 
         logger.info("Generating HPO for %d entries...", len(todo))
-        for n, idx in enumerate(
-            tqdm(todo, desc="Generating HPO", unit="entry"), start=1
-        ):
+        for n, idx in enumerate(todo):
             rec = self._generate_hpo_terms(non_ex.loc[[idx]], system_message).iloc[0]
             hp = rec["HPO_Terms"][0]["HPO_Term"]
             non_ex.at[idx, "llm_parse_reason"] = rec["llm_parse_reason"]
