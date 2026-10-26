@@ -33,7 +33,9 @@ class EmbeddingModel(ABC):
 
     @property
     @abstractmethod
-    def dim(self) -> int: ...
+    def dim(self) -> int:
+        """"""
+        ...
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.model_name!r})"
@@ -53,6 +55,7 @@ class SentenceTransformerModel(EmbeddingModel):
         self._model = SentenceTransformer(model_name, device=device)
 
     def encode(self, texts: Sequence[str], batch_size: int = 64) -> Embeddings:
+        """Embed documents. Returns shape (n, dim), L2-normalized."""
         vecs: np.ndarray = self._model.encode(
             list(texts),
             batch_size=batch_size,
@@ -63,6 +66,7 @@ class SentenceTransformerModel(EmbeddingModel):
 
     @property
     def dim(self) -> int:
+        """The embedding dimension."""
         d: int | None = self._model.get_embedding_dimension()
         if d is None:
             raise RuntimeError(
@@ -83,12 +87,14 @@ class FastEmbedModel(EmbeddingModel):
         self._dim = None
 
     def encode(self, texts: Sequence[str], batch_size: int = 64) -> Embeddings:
+        """Embed documents. Returns shape (n, dim), L2-normalized."""
         vecs: Iterable[np.ndarray] = self._model.embed(
             list(texts), batch_size=batch_size
         )
         return self._stack(vecs)
 
     def encode_queries(self, texts: Sequence[str], batch_size: int = 64) -> Embeddings:
+        """Embed search queries. Same as encode() unless a model needs otherwise."""
         # Applies the model's query prefix (matters for BGE retrieval)
         vecs: Iterable[np.ndarray] = self._model.query_embed(
             list(texts), batch_size=batch_size
@@ -103,6 +109,7 @@ class FastEmbedModel(EmbeddingModel):
 
     @property
     def dim(self) -> int:
+        """The embedding dimension."""
         if self._dim is None:
             self._dim = int(self.encode(["probe"]).shape[1])
         return self._dim
@@ -117,6 +124,7 @@ _BACKENDS: dict[ModelBackend, type[EmbeddingModel]] = {
 def load_embedding_model(
     model_name: str, backend: ModelBackend, **kwargs: Any
 ) -> EmbeddingModel:
+    """Loads an embedding model from backend."""
     try:
         cls: type[EmbeddingModel] = _BACKENDS[backend]
     except KeyError:

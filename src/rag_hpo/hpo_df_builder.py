@@ -13,6 +13,7 @@ class HPODataframeBuilder:
         self._clean_abnormality = re.compile(r"(?i)^Abnormality of(?: the)?\s*")
 
     def build_hpo_dataframe(self, limit: int | None = None) -> pd.DataFrame:
+        """Builds the HPO dataframe."""
         records = []
         terms = (
             list(self._ontology.terms())[:limit]

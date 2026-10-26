@@ -30,9 +30,11 @@ class CheckpointStore:
 
     @property
     def enabled(self) -> bool:
+        """True if the directory holds a resumable run."""
         return self.directory is not None
 
     def path(self, key: str) -> Path | None:
+        """Return the path of the checkpoint file for the given key."""
         if not self.enabled:
             return None
         return self.directory / f"{key}.pkl"
@@ -48,9 +50,11 @@ class CheckpointStore:
         return [p.name for p in paths if p is not None and p.exists()]
 
     def empty_state(self) -> dict[str, pd.DataFrame | None]:
+        """Return a dict mapping stage key -> DataFrame or None."""
         return {key: None for key in self.keys}
 
     def load(self) -> dict[str, pd.DataFrame | None]:
+        """Load the checkpoint state."""
         state = self.empty_state()
         for key in self.keys:
             p = self.path(key)

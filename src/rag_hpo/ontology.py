@@ -12,9 +12,11 @@ class Ontology:
         self._root_id = root_id
 
     def root_id(self):
+        """Returns the root term id."""
         return self._root_id
 
     def terms(self) -> _OntologyTerms:
+        """Returns a list of all ontology terms."""
         return self._inner.terms()
 
     def root_to_node_paths(self, term_id: str) -> list[str]:
