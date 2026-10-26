@@ -3,6 +3,7 @@
 Each wheel bundles its own libomp.dylib; running several multi-threaded
 in one process hangs or segfaults.
 """
+
 import importlib.util
 import os
 import sys
