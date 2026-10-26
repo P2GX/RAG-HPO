@@ -22,7 +22,7 @@ from rag_hpo.embedder import Embedder
 from rag_hpo.embedding_model import EmbeddingModel
 from rag_hpo.hit import Hit
 from rag_hpo.hpo_doc import HPODoc
-from rag_hpo.llm_client import LLMClient
+from rag_hpo.llm_client import ILLMClient
 from rag_hpo.utils import (
     _JSON_OBJECT_PATTERN,
     _NON_ASCII_PATTERN,
@@ -49,7 +49,7 @@ class RAGHPO:
     def __init__(
         self,
         embedding_model: EmbeddingModel,
-        llm_client: LLMClient,
+        llm_client: ILLMClient,
         meta_path: Path | str = "hpo_meta.json",
         vec_path: Path | str = "hpo_embedded.npz",
     ):
@@ -68,7 +68,7 @@ class RAGHPO:
         cls,
         ontology: pronto.Ontology,
         embedding_model: EmbeddingModel,
-        llm_client: LLMClient,
+        llm_client: ILLMClient,
         hp_meta_file: Path,
         emb_file: Path,
     ) -> Self:
