@@ -34,9 +34,33 @@ class Embedder:
         self._model = model
         self._batch_size = batch_size
 
-    def get_embedding(
+    def build_vector_db(
         self, hpo_df: pd.DataFrame, hp_meta_file: Path, emb_file: Path
     ) -> None:
+        """
+        Embed HPO term phrases and write the vector database to disk.
+
+        Each row of ``hpo_df`` is one phrase (a term label or synonym) for an HPO
+        term. Phrases are cleaned, embedded in batches, and saved as two files
+        that ``RAGHPO`` loads at query time:
+
+        - ``hp_meta_file`` (JSON): the model name, per-term constants (one entry
+          per unique ``hp_id``, holding the fields in ``_CONSTANT_FIELDS``), and
+          per-phrase entries (``hp_id``, cleaned ``info`` text, ``direction``).
+        - ``emb_file`` (compressed .npz): an ``emb`` array of float16 embeddings,
+          one row per entry, in the same order as ``entries``.
+
+        Args:
+            hpo_df: Dataframe with ``phrase``, ``hp_id`` and every column in
+                ``_CONSTANT_FIELDS``.
+            hp_meta_file: Path to write the metadata JSON to. Overwritten if it exists.
+            emb_file: Path to write the embeddings to. Overwritten if it exists.
+                Should end in ``.npz``; otherwise numpy appends the suffix.
+
+        Raises:
+            ValueError: If ``hpo_df`` is empty.
+            KeyError: If ``hpo_df`` is missing a required column.
+        """
         constants: dict[str, dict[str, Any]] = {}
         entries: list[dict[str, Any]] = []
         infos: list[str] = []

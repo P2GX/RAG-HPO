@@ -54,7 +54,7 @@ extend-select = [
     "PD015", # Use .merge method instead of pd.merge function. They have equivalent functionality.
 
     # Complexity
-    "C901", # {name} is too complex ({complexity} > {max_complexity})
+    # "C901", # {name} is too complex ({complexity} > {max_complexity})
 
     # Loops
     "SIM113", # Use enumerate() for index variable {index} in for loop

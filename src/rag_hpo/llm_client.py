@@ -75,6 +75,7 @@ class LLMClient:
         )
 
     def query(self, user_input: str, system_message: str) -> str:
+        """Queries the LLM server for user_input."""
         estimated = len(self._encoder.encode(user_input)) + len(
             self._encoder.encode(system_message)
         )

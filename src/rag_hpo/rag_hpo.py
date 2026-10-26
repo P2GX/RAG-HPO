@@ -73,11 +73,35 @@ class RAGHPO:
         hp_meta_file: Path,
         emb_file: Path,
     ) -> Self:
+        """
+        Build the HPO vector database from an ontology and return a ready-to-use instance.
+
+        Builds a dataframe of HPO terms from the ontology, embeds them with
+        ``embedding_model``, and writes the term metadata and embedding matrix to
+        disk. The returned instance reads those files lazily on its first
+        ``extract()`` call. Use this the first time, or whenever the ontology or
+        embedding model changes; otherwise construct ``RAGHPO`` directly with the
+        existing files.
+
+        Args:
+            ontology: The HPO ontology to build the term dataframe from.
+            embedding_model: Model used to embed the HPO terms. The same model
+                must be used at query time, so it is also passed to the new instance.
+            llm_client: Client for the LLM used in phenotype extraction and mapping.
+            hp_meta_file: Path to write the term metadata (JSON) to.
+            emb_file: Path to write the embedding matrix (.npz) to.
+
+        Returns:
+            A ``RAGHPO`` instance configured to use the newly written files.
+
+        Note:
+            Existing files at ``hp_meta_file`` and ``emb_file`` are overwritten.
+        """
         df_builder = HPODataframeBuilder(ontology)
         hpo_df = df_builder.build_hpo_dataframe()
         embedder = Embedder(embedding_model)
-        embedder.get_embedding(hpo_df, hp_meta_file, emb_file)
-        return RAGHPO(embedding_model, llm_client, hp_meta_file, emb_file)
+        embedder.build_vector_db(hpo_df, hp_meta_file, emb_file)
+        return cls(embedding_model, llm_client, hp_meta_file, emb_file)
 
     def extract(
         self,
@@ -312,9 +336,9 @@ class RAGHPO:
         for n, idx in enumerate(todo):
             rec = self._generate_hpo_terms(non_ex.loc[[idx]], system_message).iloc[0]
             hp = rec["HPO_Terms"][0]["HPO_Term"]
-            non_ex.at[idx, "llm_parse_reason"] = rec["llm_parse_reason"]
-            non_ex.at[idx, "raw_llm_resp"] = rec["raw_llm_resp"]
-            non_ex.at[idx, "HPO_Term"] = hp or "No Candidate Fit"
+            non_ex.loc[idx, "llm_parse_reason"] = rec["llm_parse_reason"]
+            non_ex.loc[idx, "raw_llm_resp"] = rec["raw_llm_resp"]
+            non_ex.loc[idx, "HPO_Term"] = hp or "No Candidate Fit"
 
             if n % every == 0 or n == len(todo):
                 state["non_exact"] = non_ex.copy()
@@ -688,13 +712,17 @@ class RAGHPO:
         # Last resort: pick out any dicts with 'phrase' and 'category' keys
         if not findings:
             findings = []
-            for m in re.findall(r"\{[^\}]*\}", raw or ""):
+
+            def _parse_json_obj(s: str) -> dict | None:
                 try:
-                    d = json.loads(m)
-                    if "phrase" in d and "category" in d:
-                        findings.append(d)
-                except Exception:
-                    continue
+                    return json.loads(s)
+                except json.JSONDecodeError:
+                    return None
+
+            for m in re.findall(r"\{[^\}]*\}", raw or ""):
+                d = _parse_json_obj(m)
+                if d and "phrase" in d and "category" in d:
+                    findings.append(d)
 
         findings = [
             f
