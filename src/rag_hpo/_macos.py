@@ -5,6 +5,7 @@ multi-threaded OpenMP code hangs or segfaults. Restricting OpenMP to one
 thread and loading torch's copy first avoids it.
 Must run before torch, faiss, sklearn or numpy-heavy code is imported.
 """
+
 import importlib.util
 import os
 import sys
