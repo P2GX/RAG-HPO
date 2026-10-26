@@ -31,9 +31,9 @@ dev = [
 
 [project.urls]
 homepage = "https://www.smart-monkey.blog/"
-repository = "https://github.com/SmartMonkey-git/RAG-HPO"
-documentation = "https://github.com/SmartMonkey-git/RAG-HPO"
-bugtracker = "https://github.com/SmartMonkey-git/RAG-HPO/issues"
+repository = "https://github.com/P2GX/RAG-HPO"
+documentation = "https://github.com/P2GX/RAG-HPO"
+bugtracker = "https://github.com/P2GX/RAG-HPO/issues"
 
 [tool.setuptools]
 packages.find = { where = ["src"] }
