@@ -1,20 +1,51 @@
+from __future__ import annotations
+
+import json
 import os
 import re
 import time
+from abc import ABC, abstractmethod
 from collections import deque
 from datetime import date
 
-import requests
-import tiktoken
-
 _THINK_BLOCK = re.compile(r"<think>.*?</think>", re.S)
+_JSON_HINT = "\n\nRespond with a single valid JSON object and nothing else."
+
+
+def _strip_think(text: str) -> str:
+    """Reasoning models may prepend a <think> block; its braces confuse JSON extraction."""
+    return _THINK_BLOCK.sub("", text).strip()
+
+
+def _extract_json_object(text: str) -> str:
+    """Return the outermost {...} if it parses as JSON, otherwise the text unchanged."""
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end > start:
+        candidate = text[start : end + 1]
+        try:
+            json.loads(candidate)
+            return candidate
+        except json.JSONDecodeError:
+            pass
+    return text
 
 
 class TokenBudgetExceeded(RuntimeError):
     pass
 
 
-class LLMClient:
+class ILLMClient(ABC):
+    @abstractmethod
+    def query(self, user_input: str, system_message: str) -> str:
+        """Abstract method to query the LLM for user_input."""
+        ...
+
+    def query_batch(self, user_inputs: list[str], system_message: str) -> list[str]:
+        """Default: one query per input. Subclasses can override with real batching."""
+        return [self.query(u, system_message) for u in user_inputs]
+
+
+class LLMClient(ILLMClient):
     """Client for any OpenAI-compatible chat completions endpoint (Ollama, Groq, OpenAI, vLLM, ...).
 
     Defaults to a local Ollama server. Use LLMClient.groq() for the hosted setup.
@@ -31,6 +62,9 @@ class LLMClient:
         timeout: float = 300.0,
         json_mode: bool = True,
     ) -> None:
+        import requests
+        import tiktoken
+
         self.model_name = model_name
         self.endpoint = endpoint
         self.max_tokens_per_day = max_tokens_per_day
@@ -106,9 +140,7 @@ class LLMClient:
         if not choices:
             return ""
         content = choices[0].get("message", {}).get("content") or ""
-        # Reasoning models may prepend a <think> block; it can contain braces
-        # that confuse the JSON extraction downstream.
-        return _THINK_BLOCK.sub("", content).strip()
+        return _strip_think(content)
 
     def _check_token_budget(self, estimated: int) -> None:
         if self.max_tokens_per_day is None:
@@ -132,3 +164,94 @@ class LLMClient:
         if len(self._request_times) >= self.max_queries_per_minute:
             time.sleep(60 - (now - self._request_times[0]))
         self._request_times.append(time.monotonic())
+
+
+class LocalLLMClient(ILLMClient):
+    """Runs a Hugging Face chat model inside the current Python process."""
+
+    def __init__(
+        self,
+        model_name: str = "Qwen/Qwen3.5-4B",
+        temperature: float = 0.0,
+        max_new_tokens: int = 1024,
+        json_mode: bool = True,
+        enable_thinking: bool = False,
+        batch_size: int = 8,
+        device_map: str = "auto",
+        dtype: str = "auto",
+    ) -> None:
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        self._torch = torch
+        self.model_name = model_name
+        self.temperature = temperature
+        self.max_new_tokens = max_new_tokens
+        self.json_mode = json_mode
+        self.enable_thinking = enable_thinking
+        self.batch_size = batch_size
+
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.tokenizer.padding_side = "left"  # required for batched generation
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name, torch_dtype=dtype, device_map=device_map
+        )
+        self.model.eval()
+
+    def query(self, user_input: str, system_message: str) -> str:
+        """Queries the LLM"""
+        return self._generate([user_input], system_message)[0]
+
+    def query_batch(self, user_inputs: list[str], system_message: str) -> list[str]:
+        """Same as query() for many inputs at once; much faster on a GPU."""
+        results: list[str] = []
+        for i in range(0, len(user_inputs), self.batch_size):
+            results.extend(
+                self._generate(user_inputs[i : i + self.batch_size], system_message)
+            )
+        return results
+
+    def _build_prompt(self, user_input: str, system_message: str) -> str:
+        if self.json_mode:
+            system_message = system_message + _JSON_HINT
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_input},
+        ]
+        # enable_thinking is used by Qwen3 templates and ignored by others.
+        return self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=self.enable_thinking,
+        )
+
+    def _generate(self, user_inputs: list[str], system_message: str) -> list[str]:
+        prompts = [self._build_prompt(u, system_message) for u in user_inputs]
+        batch = self.tokenizer(prompts, return_tensors="pt", padding=True).to(
+            self.model.device
+        )
+
+        gen_kwargs = {
+            "max_new_tokens": self.max_new_tokens,
+            "pad_token_id": self.tokenizer.pad_token_id,
+        }
+        if self.temperature > 0:
+            gen_kwargs.update(do_sample=True, temperature=self.temperature)
+        else:
+            gen_kwargs.update(do_sample=False, temperature=None, top_p=None, top_k=None)
+
+        with self._torch.inference_mode():
+            out = self.model.generate(**batch, **gen_kwargs)
+
+        new_tokens = out[:, batch["input_ids"].shape[1] :]  # drop the prompt
+        texts = self.tokenizer.batch_decode(new_tokens, skip_special_tokens=True)
+
+        results = [_strip_think(t) for t in texts]
+        if self.json_mode:
+            # No server-side JSON mode here, so trim any chatter around the object.
+            results = [_extract_json_object(t) for t in results]
+        return results

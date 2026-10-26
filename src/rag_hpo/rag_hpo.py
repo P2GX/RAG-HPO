@@ -23,7 +23,6 @@ from rag_hpo.embedding_model import EmbeddingModel
 from rag_hpo.hit import Hit
 from rag_hpo.hpo_doc import HPODoc
 from rag_hpo.llm_client import LLMClient
-from rag_hpo.ontology import Ontology
 from rag_hpo.utils import (
     _JSON_OBJECT_PATTERN,
     _NON_ASCII_PATTERN,
