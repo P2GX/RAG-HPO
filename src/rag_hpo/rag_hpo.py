@@ -11,6 +11,7 @@ from typing import Any, Iterable, Self
 import faiss
 import numpy as np
 import pandas as pd
+import pronto
 from numpy.typing import NDArray
 from rapidfuzz import fuzz
 from tabulate import tabulate
@@ -20,7 +21,6 @@ from rag_hpo.constants import PROMPTS
 from rag_hpo.embedder import Embedder
 from rag_hpo.embedding_model import EmbeddingModel
 from rag_hpo.hit import Hit
-from rag_hpo.hpo_df_builder import HPODataframeBuilder
 from rag_hpo.hpo_doc import HPODoc
 from rag_hpo.llm_client import LLMClient
 from rag_hpo.ontology import Ontology
@@ -67,7 +67,7 @@ class RAGHPO:
     @classmethod
     def inti_and_create_embeddings(
         cls,
-        ontology: Ontology,
+        ontology: pronto.Ontology,
         embedding_model: EmbeddingModel,
         llm_client: LLMClient,
         hp_meta_file: Path,
@@ -97,10 +97,9 @@ class RAGHPO:
         Note:
             Existing files at ``hp_meta_file`` and ``emb_file`` are overwritten.
         """
-        df_builder = HPODataframeBuilder(ontology)
-        hpo_df = df_builder.build_hpo_dataframe()
+        ontology = Ontology(ontology)
         embedder = Embedder(embedding_model)
-        embedder.build_vector_db(hpo_df, hp_meta_file, emb_file)
+        embedder.build_vector_db(ontology, hp_meta_file, emb_file)
         return cls(embedding_model, llm_client, hp_meta_file, emb_file)
 
     def extract(

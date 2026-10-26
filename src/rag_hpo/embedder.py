@@ -5,9 +5,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pandas as pd
+import pronto
 
 from rag_hpo.embedding_model import EmbeddingModel
+from rag_hpo._hpo_df_builder import HPODataframeBuilder
+from rag_hpo.ontology import Ontology
 from rag_hpo.utils import _clean_text
 
 logger = logging.getLogger(__name__)
@@ -35,7 +37,7 @@ class Embedder:
         self._batch_size = batch_size
 
     def build_vector_db(
-        self, hpo_df: pd.DataFrame, hp_meta_file: Path, emb_file: Path
+        self, ontology: pronto.Ontology, hp_meta_file: Path, emb_file: Path
     ) -> None:
         """
         Embed HPO term phrases and write the vector database to disk.
@@ -51,8 +53,7 @@ class Embedder:
           one row per entry, in the same order as ``entries``.
 
         Args:
-            hpo_df: Dataframe with ``phrase``, ``hp_id`` and every column in
-                ``_CONSTANT_FIELDS``.
+            ontology: A loaded HPO instance as a pronto.Ontology.
             hp_meta_file: Path to write the metadata JSON to. Overwritten if it exists.
             emb_file: Path to write the embeddings to. Overwritten if it exists.
                 Should end in ``.npz``; otherwise numpy appends the suffix.
@@ -64,6 +65,9 @@ class Embedder:
         constants: dict[str, dict[str, Any]] = {}
         entries: list[dict[str, Any]] = []
         infos: list[str] = []
+
+        ontology = Ontology(ontology)
+        hpo_df = HPODataframeBuilder(ontology).build_hpo_dataframe()
 
         for row in hpo_df.to_dict(orient="records"):
             info = _clean_text(row["phrase"])
