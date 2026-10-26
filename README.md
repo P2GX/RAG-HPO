@@ -44,8 +44,6 @@ clinical note ──► LLM: extract phrases ──► keep "Abnormal" ──►
    using the sentence the phrase came from as context.
 5. **Compile**: results are grouped per patient.
 
-The [pipeline guide](docs/pipeline.md) covers each step in detail.
-
 ## You need
 - **The HPO ontology** in OBO format (`hp.obo`), from the
   [HPO release page](https://hpo.jax.org/data/ontology) or
@@ -110,8 +108,7 @@ llm = LLMClient.groq(api_key=os.environ["GROQ_API_KEY"])  # llama-3.3-70b-versat
 ```
 
 `LLMClient.groq()` applies Groq's free-tier limits: 30 requests per minute and 500,000
-tokens per day. The [configuration guide](docs/configuration.md) covers OpenAI, LM Studio
-and other endpoints.
+tokens per day.
 
 ## Output
 
