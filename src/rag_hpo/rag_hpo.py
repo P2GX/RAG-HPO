@@ -16,13 +16,14 @@ from numpy.typing import NDArray
 from rapidfuzz import fuzz
 from tabulate import tabulate
 
+from rag_hpo._macos import limit_openmp
 from rag_hpo.checkpoint_store import CheckpointStore
 from rag_hpo.constants import PROMPTS
 from rag_hpo.embedder import Embedder
 from rag_hpo.embedding_model import EmbeddingModel
 from rag_hpo.hit import Hit
 from rag_hpo.hpo_doc import HPODoc
-from rag_hpo.llm_client import  ILLMClient
+from rag_hpo.llm_client import ILLMClient
 from rag_hpo.utils import (
     _JSON_OBJECT_PATTERN,
     _NON_ASCII_PATTERN,
@@ -53,6 +54,7 @@ class RAGHPO:
         meta_path: Path | str = "hpo_meta.json",
         vec_path: Path | str = "hpo_embedded.npz",
     ):
+        limit_openmp()
         self._embedding_model = embedding_model
         self._llm_client = llm_client
         self._meta_path = Path(meta_path)
