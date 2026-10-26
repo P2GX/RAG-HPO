@@ -6,7 +6,7 @@ import pronto
 
 
 from rag_hpo.embedding_model import SentenceTransformerModel
-from rag_hpo.llm_client import LLMClient
+from rag_hpo.llm_client import LocalLLMClient
 from rag_hpo.rag_hpo import RAGHPO
 
 
@@ -17,7 +17,7 @@ def test_pipeline():
 
     embedding_model = SentenceTransformerModel()
 
-    llm_client = LLMClient(timeout=5000)
+    llm_client = LocalLLMClient()
 
     rag_hpo = RAGHPO.inti_and_create_embeddings(
         ontology,
