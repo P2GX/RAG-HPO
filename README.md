@@ -68,7 +68,7 @@ embedding_model = SentenceTransformerModel()  # SapBERT-based biomedical model
 llm = LLMClient()  # Ollama at localhost:11434, model qwen3.5:4b
 
 # One-time: build the HPO vector database (repeat when HPO releases a new version)
-ontology = Ontology(pronto.Ontology("hp.obo"))
+ontology = pronto.Ontology("hp.obo")
 rag = RAGHPO.inti_and_create_embeddings(
     ontology,
     embedding_model,

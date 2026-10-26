@@ -97,7 +97,6 @@ class RAGHPO:
         Note:
             Existing files at ``hp_meta_file`` and ``emb_file`` are overwritten.
         """
-        ontology = Ontology(ontology)
         embedder = Embedder(embedding_model)
         embedder.build_vector_db(ontology, hp_meta_file, emb_file)
         return cls(embedding_model, llm_client, hp_meta_file, emb_file)

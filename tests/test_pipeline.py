@@ -7,7 +7,6 @@ import pronto
 
 from rag_hpo.embedding_model import SentenceTransformerModel
 from rag_hpo.llm_client import LLMClient
-from rag_hpo.ontology import Ontology
 from rag_hpo.rag_hpo import RAGHPO
 
 
@@ -15,8 +14,6 @@ def test_pipeline():
     ontology = pronto.Ontology(
         str("/Users/rouvenreuter/Downloads/hp (4).obo"), encoding="utf-8"
     )
-
-    ontology = Ontology(ontology)
 
     embedding_model = SentenceTransformerModel()
 
