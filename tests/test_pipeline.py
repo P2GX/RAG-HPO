@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pronto
 
-
 from rag_hpo.embedding_model import SentenceTransformerModel
 from rag_hpo.llm_client import LocalLLMClient
 from rag_hpo.rag_hpo import RAGHPO
@@ -17,7 +16,7 @@ def test_pipeline():
 
     embedding_model = SentenceTransformerModel()
 
-    llm_client = LocalLLMClient()
+    llm_client = LocalLLMClient(model_name="Qwen/Qwen3-0.6B", device_map=None)
 
     rag_hpo = RAGHPO.inti_and_create_embeddings(
         ontology,
