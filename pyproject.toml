@@ -4,32 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "RAG-HPO"
-version = "0.1.0"
+dynamic = ["version"]
 description = "HPO RAG as implemented by Brandon T. Garcia 2025."
 authors = [{ name = "Rouven Reuter" }]
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 readme = "README.md"
-dynamic = ["version"]
-
-[project.urls]
-homepage = "https://www.smart-monkey.blog/"
-repository = "https://github.com/SmartMonkey-git/RAG-HPO"
-documentation = "https://github.com/SmartMonkey-git/RAG-HPO"
-bugtracker = "https://github.com/SmartMonkey-git/RAG-HPO/issues"
-
-[tool.setuptools]
-packages.find = { where = ["src"] }
-
-[tool.setuptools.package-data]
-rag_hpo = ["data/*.csv"]
-
-[tool.setuptools_scm]
-version_file = "src/rag_hpo/_version.py"
-
-[tool.setuptools.dynamic]
-version = { attr = "rag_hpo._version.version" }
-
 dependencies = [
     "numpy>=2.5.4,<3",
     "pandas>=3.1.0,<4",
@@ -46,8 +26,23 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "ruff>=0.17.2,<0.18",
-    "pytest==9.1.1"
+    "pytest==9.1.1",
 ]
+
+[project.urls]
+homepage = "https://www.smart-monkey.blog/"
+repository = "https://github.com/SmartMonkey-git/RAG-HPO"
+documentation = "https://github.com/SmartMonkey-git/RAG-HPO"
+bugtracker = "https://github.com/SmartMonkey-git/RAG-HPO/issues"
+
+[tool.setuptools]
+packages.find = { where = ["src"] }
+
+[tool.setuptools.package-data]
+rag_hpo = ["data/*.csv"]
+
+[tool.setuptools_scm]
+version_file = "src/rag_hpo/_version.py"
 
 [tool.pytest.ini_options]
 addopts = "-s"
