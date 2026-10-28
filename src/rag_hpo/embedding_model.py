@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 from numpy.typing import NDArray
 
+from rag_hpo._optional import require
+
 if TYPE_CHECKING:  # imported only for type checkers, not at runtime
     from fastembed import TextEmbedding
     from sentence_transformers import SentenceTransformer
@@ -50,7 +52,9 @@ class SentenceTransformerModel(EmbeddingModel):
         device: str | None = None,
     ) -> None:
         super().__init__(model_name)
-        from sentence_transformers import SentenceTransformer
+        SentenceTransformer = require(
+            "sentence_transformers", "sentence-transformers"
+        ).SentenceTransformer
 
         self._model = SentenceTransformer(model_name, device=device)
 
@@ -81,7 +85,7 @@ class FastEmbedModel(EmbeddingModel):
 
     def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5") -> None:
         super().__init__(model_name)
-        from fastembed import TextEmbedding  # lazy import
+        TextEmbedding = require("fastembed", "fastembed").TextEmbedding
 
         self._model = TextEmbedding(model_name=model_name)
         self._dim = None

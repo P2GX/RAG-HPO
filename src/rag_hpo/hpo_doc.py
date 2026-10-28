@@ -1,7 +1,7 @@
 from typing import TypedDict, Any
 
 import numpy as np
-from numpy._typing import NDArray
+from numpy.typing import NDArray
 
 
 class HPODoc(TypedDict):
