@@ -8,6 +8,8 @@ from abc import ABC, abstractmethod
 from collections import deque
 from datetime import date
 
+from rag_hpo._optional import require
+
 _THINK_BLOCK = re.compile(r"<think>.*?</think>", re.S)
 _JSON_HINT = "\n\nRespond with a single valid JSON object and nothing else."
 
@@ -180,8 +182,10 @@ class LocalLLMClient(ILLMClient):
         device_map: str = "auto",
         dtype: str = "auto",
     ) -> None:
-        import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+        torch = require("torch", "local-llm")
+        transformers = require("transformers", "local-llm")
+        AutoModelForCausalLM = transformers.AutoModelForCausalLM
+        AutoTokenizer = transformers.AutoTokenizer
 
         self._torch = torch
         self.model_name = model_name

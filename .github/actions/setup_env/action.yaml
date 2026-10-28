@@ -20,12 +20,11 @@ runs:
             id: env-cache
             with:
                 path: ${{ env.pythonLocation }}
-                key:  ${{ hashFiles('./requirements/requirements.txt') }}-${{ hashFiles('./requirements/requirements_test.txt') }}
+                key: ${{ runner.os }}-py${{ env.pythonLocation }}-${{ hashFiles(inputs.pyproject-file-path) }}
 
         -   name: Install Dependencies
             if: ${{ steps.env-cache.outputs.cache-hit != 'true' }}
             run: |
                 python -m pip install --upgrade pip
-                pip install -r requirements/requirements.txt
-                pip install -r requirements/requirements_test.txt
+                pip install -e ".[dev]"
             shell: bash

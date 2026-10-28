@@ -51,6 +51,21 @@ clinical note ──► LLM: extract phrases ──► keep "Abnormal" ──►
 - **An LLM endpoint** that speaks the OpenAI chat-completions API. The default is a local
   [Ollama](https://ollama.com) server. Groq, OpenAI, vLLM and LM Studio also work.
 
+## Installation
+
+The core package talks to any OpenAI-compatible LLM endpoint and stays lightweight.
+Add the extra for the embedding backend you want (the Quickstart uses
+`sentence-transformers`):
+
+```bash
+pip install "rag-hpo[sentence-transformers]"   # SapBERT via PyTorch (default in the examples)
+pip install "rag-hpo[fastembed]"               # ONNX-based, no PyTorch, smaller install
+pip install "rag-hpo[local-llm]"               # run a Hugging Face LLM in-process (LocalLLMClient)
+pip install "rag-hpo[all]"                     # everything
+```
+
+Requires Python 3.11 or newer.
+
 ## Quickstart
 
 ```python
